@@ -14,8 +14,8 @@ MQTTClient client = MQTTClient(512);
 #define AWS_IOT_TOPIC "$aws/things/SPIROMETER/shadow/update"
 #define AWS_MAX_RECONNECT_TRIES 10
 // Define Publish and Describe Topics
-#define AWS_IOT_PUBLISH_TOPIC   "esp32/pub"
-#define AWS_IOT_SUBSCRIBE_TOPIC "esp32/sub"
+#define AWS_IOT_PUBLISH_TOPIC   "spiro/pub"
+#define AWS_IOT_SUBSCRIBE_TOPIC "spiro/sub"
 
 #define WIFI_NETWORK  "Test"
 #define WIFI_PASS     "135792468"
@@ -51,13 +51,12 @@ float EOTI = 0.025; //End of Test Indication(0.025 litres/second {+/-} 200ml/sec
 float MFR = 0.69;   //Modest Flow Rate(0.69 litres/second)
 float LFR = 0.5;    //Low Flow Rate(0.5 litres/second)
 float FEV1, PEF, FVC;
+float storFEV1, storFVC, storPEFR, storFEV1per;
 
 uint8_t val = 0;
 extern const unsigned char previewR[120264];
 extern const unsigned char bibiSig[8820];
 
-//const char* ssid       = "Test";
-//const char* password   = "135792468";
 //const char* ntpServer = "in.pool.ntp.org";
 //const long  gmtOffset_sec = 19800;
 //const int   daylightOffset_sec = 0;//3600
@@ -205,6 +204,10 @@ void loop() {
         runPFTAdv();
       }
       FVC = Meter->getTotalVolume();
+      storFEV1 = FEV1;
+      storPEFR = PEF;
+      storFVC = FVC;
+      storFEV1per = FEV1/FVC;
       getSensor();
       humid_corr = myBME280.readFloatHumidity();
 //      Serial.print("FVC : ");
@@ -729,17 +732,26 @@ if(WiFi.status() != WL_CONNECTED){
 void enablePacketCapture()
 {
   float temperature = myBME280.readTempC();
-  Serial.println(temperature); 
   float humidity = myBME280.readFloatHumidity();
-  Serial.println(humidity);
+  float pressure = myBME280.readFloatPressure()*psiMult;
+  float TVOC = myCCS811.getTVOC();
+  float eCO2 = myCCS811.getCO2();
 
-  Serial.println("Temp/Humidity");
-  Serial.print(temperature);
-  Serial.print(" / ");
-  Serial.println(humidity);
+  float FVC = myBME280.readTempC();
+  float FEV1 = myBME280.readFloatHumidity();
+  float PEFR = myBME280.readFloatPressure()*psiMult;
+  float FEV1per = myCCS811.getTVOC();
+  ////////////////////////////////////////
   StaticJsonDocument<200> doc;
   doc["temperature"] = temperature;
   doc["humidity"] = humidity;
+  doc["pressure"] = pressure;
+  doc["tvoc"] = TVOC;
+  doc["eco2"] = eCO2;
+  doc["fvc"] = storFVC;
+  doc["fev1"] = storFEV1;
+  doc["pefr"] = storPEFR;
+  doc["fev1per"] = storFEV1per;
   
   char jsonBuffer[512];
   serializeJson(doc, jsonBuffer); // print to client
